@@ -3,7 +3,7 @@ const GESTURES = {
   rock: { name: "石頭", emoji: "✊", beats: "paper" },
   paper: { name: "布", emoji: "✋", beats: "scissors" },
 };
-const STORAGE_KEY = "rps-wizard-samples-v3";
+const STORAGE_KEY = "rps-wizard-samples-v4";
 const MIN_SAMPLES = 12;
 const SAMPLE_LIMIT = 100;
 const PREDICTION_INTERVAL = 100;
@@ -114,7 +114,6 @@ async function startCamera() {
     await video.play();
     cameraStatus.textContent = "正在載入手部辨識模型（首次使用需要下載）…";
     await loadHandLandmarker();
-    cameraStream = stream;
     video.classList.add("active");
     cameraPlaceholder.hidden = true;
     cameraButton.textContent = "關閉攝影機";
@@ -201,7 +200,7 @@ function makeFeatureVector() {
     throw new Error("攝影機畫面尚未就緒，請稍候再試。");
   }
 
-  const landmarks = handLandmarker.detectForVideo(video, performance.now()).landmarks[0];
+  const landmarks = handLandmarker.detectForVideo(video, performance.now()).worldLandmarks[0];
   if (!landmarks) return undefined;
 
   const palmScale = Math.hypot(
@@ -209,7 +208,7 @@ function makeFeatureVector() {
     landmarks[9].y - landmarks[0].y,
     landmarks[9].z - landmarks[0].z,
   );
-  if (palmScale < 0.001) return undefined;
+  if (!Number.isFinite(palmScale) || palmScale < 0.001) return undefined;
 
   const feature = [];
   for (let first = 0; first < landmarks.length; first += 1) {
@@ -339,6 +338,8 @@ async function detectGesture(runId) {
       if (votes >= STABLE_VOTES) return stableGesture;
       if (!feature) {
         cameraStatus.textContent = "尚未找到手部，請將一隻手完整放進框框內。";
+      } else {
+        cameraStatus.textContent = "辨識中，請將手勢放在框框中央並保持清楚。";
       }
     } catch (error) {
       cameraStatus.textContent = error.message;
