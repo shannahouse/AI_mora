@@ -3,19 +3,20 @@ const GESTURES = {
   rock: { name: "石頭", emoji: "✊", beats: "paper" },
   paper: { name: "布", emoji: "✋", beats: "scissors" },
 };
-const STORAGE_KEY = "rps-wizard-samples-v2";
+const STORAGE_KEY = "rps-wizard-samples-v3";
 const MIN_SAMPLES = 12;
-const FEATURE_SIZE = 48;
-const CELL_SIZE = 6;
-const ORIENTATION_BINS = 9;
 const SAMPLE_LIMIT = 100;
 const PREDICTION_INTERVAL = 100;
 const RESULT_DURATION = 4000;
 const STABILITY_WINDOW = 5;
 const STABLE_VOTES = 3;
+const MEDIAPIPE_VERSION = "0.10.21";
+const MEDIAPIPE_CDN = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}`;
+const HAND_MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+const HAND_FEATURE_SIZE = (21 * 20) / 2;
 
 const video = document.querySelector("#camera");
-const canvas = document.querySelector("#capture-canvas");
 const cameraButton = document.querySelector("#camera-button");
 const playButton = document.querySelector("#play-button");
 const cameraStatus = document.querySelector("#camera-status");
@@ -32,6 +33,8 @@ let cameraStream;
 let samples = loadSamples();
 let matchPhase = "idle";
 let matchRunId = 0;
+let handLandmarker;
+let handLandmarkerPromise;
 
 function loadSamples() {
   try {
@@ -43,8 +46,7 @@ function loadSamples() {
           ? saved[gesture].filter(
               (sample) =>
                 Array.isArray(sample) &&
-                sample.length ===
-                  (FEATURE_SIZE / CELL_SIZE) ** 2 * ORIENTATION_BINS &&
+                sample.length === HAND_FEATURE_SIZE &&
                 sample.every(Number.isFinite),
             )
           : [],
@@ -97,8 +99,9 @@ async function startCamera() {
 
   cameraButton.disabled = true;
   cameraStatus.textContent = "正在等待攝影機權限…";
+  let stream;
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
+    stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
         facingMode: "user",
@@ -106,18 +109,24 @@ async function startCamera() {
         height: { ideal: 720 },
       },
     });
-    video.srcObject = cameraStream;
+    cameraStream = stream;
+    video.srcObject = stream;
     await video.play();
+    cameraStatus.textContent = "正在載入手部辨識模型（首次使用需要下載）…";
+    await loadHandLandmarker();
+    cameraStream = stream;
     video.classList.add("active");
     cameraPlaceholder.hidden = true;
     cameraButton.textContent = "關閉攝影機";
     cameraButton.disabled = false;
-    cameraStatus.textContent = "攝影機已就緒，請將手勢放在框框中央。";
-    trainingStatus.textContent = "比出剪刀、石頭或布，再按下對應按鈕拍攝樣本。";
+    cameraStatus.textContent = "攝影機與手部辨識已就緒，請將一隻手放在框框中央。";
+    trainingStatus.textContent = "辨識器已準備好；將一隻手放進框框，依序拍攝三種手勢樣本。";
     for (const button of document.querySelectorAll(".gesture-card")) {
       button.disabled = false;
     }
   } catch (error) {
+    for (const track of stream?.getTracks() || []) track.stop();
+    video.srcObject = null;
     cameraStream = undefined;
     cameraButton.disabled = false;
     if (error.name === "NotAllowedError" || error.name === "SecurityError") {
@@ -125,11 +134,48 @@ async function startCamera() {
     } else if (error.name === "NotFoundError") {
       cameraStatus.textContent = "找不到攝影機，請連接網路攝影機後重試。";
     } else {
-      console.error("攝影機啟動失敗。", error);
-      cameraStatus.textContent = `攝影機啟動失敗：${error.message || "請確認裝置正常後重試。"}`;
+      console.error("手部辨識器或攝影機啟動失敗。", error);
+      cameraStatus.textContent =
+        `手部辨識器載入失敗，請確認網路連線後重試。${error.message ? ` (${error.message})` : ""}`;
     }
   }
   updateProgress();
+}
+
+async function loadHandLandmarker() {
+  if (handLandmarker) return handLandmarker;
+  if (!handLandmarkerPromise) {
+    handLandmarkerPromise = (async () => {
+      const { FilesetResolver, HandLandmarker } = await import(
+        `${MEDIAPIPE_CDN}/vision_bundle.mjs`
+      );
+      const vision = await FilesetResolver.forVisionTasks(`${MEDIAPIPE_CDN}/wasm`);
+      const options = {
+        baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" },
+        runningMode: "VIDEO",
+        numHands: 1,
+        minHandDetectionConfidence: 0.65,
+        minHandPresenceConfidence: 0.65,
+        minTrackingConfidence: 0.6,
+      };
+      try {
+        handLandmarker = await HandLandmarker.createFromOptions(vision, options);
+      } catch (gpuError) {
+        console.warn("GPU 手部辨識初始化失敗，改用 CPU。", gpuError);
+        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          ...options,
+          baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "CPU" },
+        });
+      }
+      return handLandmarker;
+    })();
+  }
+  try {
+    return await handLandmarkerPromise;
+  } catch (error) {
+    handLandmarkerPromise = undefined;
+    throw error;
+  }
 }
 
 function stopCamera() {
@@ -155,61 +201,41 @@ function makeFeatureVector() {
     throw new Error("攝影機畫面尚未就緒，請稍候再試。");
   }
 
-  const side = Math.floor(Math.min(video.videoWidth, video.videoHeight) * 0.75);
-  const left = Math.floor((video.videoWidth - side) / 2);
-  const top = Math.floor((video.videoHeight - side) / 2);
-  canvas.width = FEATURE_SIZE;
-  canvas.height = FEATURE_SIZE;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  context.drawImage(video, left, top, side, side, 0, 0, FEATURE_SIZE, FEATURE_SIZE);
+  const landmarks = handLandmarker.detectForVideo(video, performance.now()).landmarks[0];
+  if (!landmarks) return undefined;
 
-  const { data } = context.getImageData(0, 0, FEATURE_SIZE, FEATURE_SIZE);
-  const luminance = new Float32Array(FEATURE_SIZE * FEATURE_SIZE);
-  for (let index = 0; index < luminance.length; index += 1) {
-    const pixel = index * 4;
-    luminance[index] =
-      (0.299 * data[pixel] + 0.587 * data[pixel + 1] + 0.114 * data[pixel + 2]) / 255;
-  }
+  const palmScale = Math.hypot(
+    landmarks[9].x - landmarks[0].x,
+    landmarks[9].y - landmarks[0].y,
+    landmarks[9].z - landmarks[0].z,
+  );
+  if (palmScale < 0.001) return undefined;
 
-  const cellsPerSide = FEATURE_SIZE / CELL_SIZE;
-  const feature = new Float32Array(cellsPerSide * cellsPerSide * ORIENTATION_BINS);
-  for (let y = 1; y < FEATURE_SIZE - 1; y += 1) {
-    for (let x = 1; x < FEATURE_SIZE - 1; x += 1) {
-      const offset = y * FEATURE_SIZE + x;
-      const dx = luminance[offset + 1] - luminance[offset - 1];
-      const dy = luminance[offset + FEATURE_SIZE] - luminance[offset - FEATURE_SIZE];
-      const magnitude = Math.hypot(dx, dy);
-      if (magnitude === 0) continue;
-
-      let angle = Math.atan2(dy, dx);
-      if (angle < 0) angle += Math.PI;
-      if (angle >= Math.PI) angle -= Math.PI;
-      const bin = Math.min(
-        ORIENTATION_BINS - 1,
-        Math.floor((angle / Math.PI) * ORIENTATION_BINS),
-      );
-      const cellX = Math.min(cellsPerSide - 1, Math.floor(x / CELL_SIZE));
-      const cellY = Math.min(cellsPerSide - 1, Math.floor(y / CELL_SIZE));
-      feature[(cellY * CELL_SIZE + cellX) * ORIENTATION_BINS + bin] += magnitude;
+  const feature = [];
+  for (let first = 0; first < landmarks.length; first += 1) {
+    for (let second = first + 1; second < landmarks.length; second += 1) {
+      const dx = landmarks[first].x - landmarks[second].x;
+      const dy = landmarks[first].y - landmarks[second].y;
+      const dz = landmarks[first].z - landmarks[second].z;
+      feature.push(Math.hypot(dx, dy, dz) / palmScale);
     }
   }
-
-  let norm = 0;
-  for (const value of feature) norm += value * value;
-  norm = Math.sqrt(norm);
-  if (norm < 0.001) throw new Error("畫面太暗或沒有清楚的手勢，請調整光線後重試。");
-  return Array.from(feature, (value) => value / norm);
+  return feature;
 }
 
 function captureSample(gesture) {
   try {
     const feature = makeFeatureVector();
+    if (!feature) {
+      trainingStatus.textContent = "尚未找到手部，請將一隻手完整放進攝影機畫面的框框內。";
+      return;
+    }
     const classSamples = samples[gesture];
     if (classSamples.length >= SAMPLE_LIMIT) classSamples.shift();
     classSamples.push(feature);
     if (!saveSamples()) return;
     updateProgress();
-    trainingStatus.textContent = `${GESTURES[gesture].name}樣本已儲存（${classSamples.length} 張）；可變換手勢角度後再拍攝。`;
+    trainingStatus.textContent = `${GESTURES[gesture].name}手勢樣本已儲存（${classSamples.length} 張）；可稍微改變手掌角度後再拍攝。`;
   } catch (error) {
     trainingStatus.textContent = error.message;
   }
@@ -297,7 +323,8 @@ async function detectGesture(runId) {
 
   while (runId === matchRunId && matchPhase === "running") {
     try {
-      const gesture = predictGesture(makeFeatureVector());
+      const feature = makeFeatureVector();
+      const gesture = feature ? predictGesture(feature) : undefined;
       predictions.push(gesture);
       if (predictions.length > STABILITY_WINDOW) predictions.shift();
 
@@ -310,6 +337,9 @@ async function detectGesture(runId) {
       )[0] || [];
 
       if (votes >= STABLE_VOTES) return stableGesture;
+      if (!feature) {
+        cameraStatus.textContent = "尚未找到手部，請將一隻手完整放進框框內。";
+      }
     } catch (error) {
       cameraStatus.textContent = error.message;
     }

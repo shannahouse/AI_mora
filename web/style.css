@@ -164,6 +164,17 @@ video.active {
   pointer-events: none;
 }
 
+.guide span {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  left: 0;
+  color: white;
+  font-size: 0.78rem;
+  text-align: center;
+  text-shadow: 0 1px 4px #000;
+}
+
 .countdown,
 .result-overlay {
   position: absolute;
