@@ -123,6 +123,7 @@ async function startCamera() {
     for (const button of document.querySelectorAll(".gesture-card")) {
       button.disabled = false;
     }
+    updateProgress();
   } catch (error) {
     for (const track of stream?.getTracks() || []) track.stop();
     video.srcObject = null;
