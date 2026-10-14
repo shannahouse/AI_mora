@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f2e9">
+    <title>猜拳必勝魔法</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <p class="eyebrow">ROCK · PAPER · SCISSORS</p>
+        <h1>猜拳必勝魔法</h1>
+        <p class="intro">先教會我認識你的手勢，再來一場電腦必勝的猜拳對決！</p>
+      </header>
+
+      <nav class="steps" aria-label="遊戲步驟">
+        <span class="step active" id="training-step">1. 訓練手勢</span>
+        <span class="step" id="match-step">2. 開始對戰</span>
+      </nav>
+
+      <section class="panel camera-panel" aria-label="網路攝影機">
+        <div class="camera-frame">
+          <video id="camera" autoplay playsinline muted></video>
+          <div class="camera-placeholder" id="camera-placeholder">
+            <span aria-hidden="true">📷</span>
+            <p>連接攝影機，將手勢放進框框裡</p>
+          </div>
+          <div class="guide" aria-hidden="true"></div>
+          <canvas id="capture-canvas" hidden></canvas>
+        </div>
+        <div class="camera-controls">
+          <button class="button secondary" id="camera-button" type="button">開啟攝影機</button>
+          <p id="camera-status" class="status" role="status" aria-live="polite">使用 localhost 才能安全存取攝影機。</p>
+        </div>
+      </section>
+
+      <section class="panel training-panel" id="training-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">教我辨識</p>
+            <h2>訓練你的手勢</h2>
+          </div>
+          <button class="text-button" id="reset-button" type="button">清除訓練資料</button>
+        </div>
+        <p class="hint">依序比出剪刀、石頭、布，按下按鈕拍攝樣本。每種至少需要 8 張；移動手的位置與角度，讓辨識更穩定。</p>
+        <div class="gesture-list">
+          <button class="gesture-card" data-gesture="scissors" type="button" disabled>
+            <span class="gesture-emoji" aria-hidden="true">✌️</span>
+            <span class="gesture-name">剪刀</span>
+            <span class="sample-count" id="count-scissors">0 / 8 張</span>
+            <span class="button sample-button">拍攝剪刀樣本</span>
+          </button>
+          <button class="gesture-card" data-gesture="rock" type="button" disabled>
+            <span class="gesture-emoji" aria-hidden="true">✊</span>
+            <span class="gesture-name">石頭</span>
+            <span class="sample-count" id="count-rock">0 / 8 張</span>
+            <span class="button sample-button">拍攝石頭樣本</span>
+          </button>
+          <button class="gesture-card" data-gesture="paper" type="button" disabled>
+            <span class="gesture-emoji" aria-hidden="true">✋</span>
+            <span class="gesture-name">布</span>
+            <span class="sample-count" id="count-paper">0 / 8 張</span>
+            <span class="button sample-button">拍攝布樣本</span>
+          </button>
+        </div>
+        <p class="status" id="training-status" role="status" aria-live="polite">開啟攝影機後即可開始訓練。你的樣本只會儲存在這個瀏覽器。</p>
+      </section>
+
+      <section class="panel match-panel" id="match-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">決戰時刻</p>
+            <h2>來猜拳吧！</h2>
+          </div>
+          <span class="ready-badge" id="ready-badge">尚未完成訓練</span>
+        </div>
+        <p class="hint">比出手勢並拍攝，辨識成功後電腦就會出招——而且永遠贏！</p>
+        <button class="button primary" id="play-button" type="button" disabled>辨識手勢並猜拳</button>
+        <div class="result" id="result" aria-live="polite" hidden>
+          <p class="result-caption">本回合結果</p>
+          <p class="result-line" id="result-line"></p>
+          <p class="result-message" id="result-message"></p>
+        </div>
+      </section>
+
+      <footer>手勢辨識在你的瀏覽器中進行，不會上傳攝影機影像。</footer>
+    </main>
+  </body>
+</html>

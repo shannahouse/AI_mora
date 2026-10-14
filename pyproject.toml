@@ -1,0 +1,9 @@
+[project]
+name = "rps-wizard"
+version = "0.1.0"
+description = "以網路攝影機訓練手勢辨識的猜拳遊戲"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false
