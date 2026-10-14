@@ -9,9 +9,10 @@ const FEATURE_SIZE = 48;
 const CELL_SIZE = 6;
 const ORIENTATION_BINS = 9;
 const SAMPLE_LIMIT = 100;
-const PREDICTION_INTERVAL = 180;
-const STABILITY_WINDOW = 7;
-const STABLE_VOTES = 4;
+const PREDICTION_INTERVAL = 100;
+const RESULT_DURATION = 4000;
+const STABILITY_WINDOW = 5;
+const STABLE_VOTES = 3;
 
 const video = document.querySelector("#camera");
 const canvas = document.querySelector("#capture-canvas");
@@ -217,17 +218,17 @@ function captureSample(gesture) {
 function predictGesture(feature) {
   const classDistances = [];
   for (const [gesture, classSamples] of Object.entries(samples)) {
-    const distances = [];
+    const closest = [];
     for (const sample of classSamples) {
       let distance = 0;
       for (let index = 0; index < feature.length; index += 1) {
         const difference = feature[index] - sample[index];
         distance += difference * difference;
       }
-      distances.push(distance);
+      closest.push(distance);
+      closest.sort((first, second) => first - second);
+      if (closest.length > 3) closest.pop();
     }
-    distances.sort((first, second) => first - second);
-    const closest = distances.slice(0, Math.min(3, distances.length));
     if (closest.length === 0) continue;
     const averageDistance =
       closest.reduce((sum, distance) => sum + distance, 0) / closest.length;
@@ -257,28 +258,42 @@ async function startMatch() {
 
   matchPhase = "countdown";
   const runId = ++matchRunId;
-  result.hidden = true;
   playButton.disabled = false;
-  playButton.textContent = "取消對戰";
+  playButton.textContent = "停止對戰";
+  void runMatchLoop(runId);
+}
 
+async function runCountdown(runId) {
+  result.hidden = true;
   for (const number of [3, 2, 1]) {
     if (runId !== matchRunId) return;
     countdown.textContent = number;
     countdown.hidden = false;
     await delay(1000);
   }
-  if (runId !== matchRunId) return;
-
   countdown.hidden = true;
-  matchPhase = "running";
-  playButton.textContent = "停止對戰";
-  cameraStatus.textContent = "正在連續辨識手勢，請將手放在框框中央。";
-  await runDetectionLoop(runId);
+  return runId === matchRunId;
 }
 
-async function runDetectionLoop(runId) {
+async function runMatchLoop(runId) {
+  while (runId === matchRunId) {
+    matchPhase = "countdown";
+    if (!(await runCountdown(runId))) return;
+
+    matchPhase = "running";
+    cameraStatus.textContent = "辨識中，請將手勢放在框框中央並保持清楚。";
+    const gesture = await detectGesture(runId);
+    if (!gesture || runId !== matchRunId) return;
+
+    showResult(gesture);
+    matchPhase = "result";
+    cameraStatus.textContent = `已辨識你的手勢：${GESTURES[gesture].name}。4 秒後開始下一局。`;
+    await delay(RESULT_DURATION);
+  }
+}
+
+async function detectGesture(runId) {
   const predictions = [];
-  let lastShownGesture;
 
   while (runId === matchRunId && matchPhase === "running") {
     try {
@@ -294,19 +309,13 @@ async function runDetectionLoop(runId) {
         (first, second) => second[1] - first[1],
       )[0] || [];
 
-      if (votes >= STABLE_VOTES && stableGesture !== lastShownGesture) {
-        showResult(stableGesture);
-        lastShownGesture = stableGesture;
-      }
-      cameraStatus.textContent =
-        votes >= STABLE_VOTES
-          ? `已辨識你的手勢：${GESTURES[stableGesture].name}`
-          : "辨識中，請將手勢放在框框中央並保持清楚。";
+      if (votes >= STABLE_VOTES) return stableGesture;
     } catch (error) {
       cameraStatus.textContent = error.message;
     }
     await delay(PREDICTION_INTERVAL);
   }
+  return undefined;
 }
 
 function stopMatch() {
@@ -314,6 +323,7 @@ function stopMatch() {
   const wasRunning = matchPhase !== "idle";
   matchPhase = "idle";
   countdown.hidden = true;
+  if (wasRunning) result.hidden = true;
   if (wasRunning) cameraStatus.textContent = "對戰已停止。";
   updateProgress();
 }

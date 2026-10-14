@@ -104,6 +104,9 @@ h1 {
 }
 
 .camera-panel {
+  position: sticky;
+  z-index: 4;
+  top: 12px;
   padding: 14px;
 }
 
@@ -111,10 +114,14 @@ h1 {
   position: relative;
   display: grid;
   overflow: hidden;
-  aspect-ratio: 4 / 3;
+  height: min(38vh, 280px);
   border-radius: 12px;
   background: #222923;
   place-items: center;
+}
+
+.gesture-card {
+  scroll-margin-top: min(365px, calc(38vh + 100px));
 }
 
 video {
@@ -150,7 +157,7 @@ video.active {
 
 .guide {
   position: absolute;
-  width: 58%;
+  width: min(58%, 34vh, 230px);
   aspect-ratio: 1;
   border: 2px dashed rgb(255 255 255 / 72%);
   border-radius: 18px;
@@ -385,6 +392,16 @@ footer {
 @media (max-width: 560px) {
   body {
     padding: 24px 12px 34px;
+  }
+
+  @media (max-height: 650px) {
+    .camera-frame {
+      height: min(28vh, 180px);
+    }
+
+    .guide {
+      width: min(50%, 25vh, 150px);
+    }
   }
 
   .camera-controls {
