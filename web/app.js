@@ -3,30 +3,34 @@ const GESTURES = {
   rock: { name: "石頭", emoji: "✊", beats: "paper" },
   paper: { name: "布", emoji: "✋", beats: "scissors" },
 };
-const STORAGE_KEY = "rps-wizard-samples-v1";
-const MIN_SAMPLES = 8;
-const FEATURE_SIZE = 32;
-const CELL_SIZE = 8;
-const ORIENTATION_BINS = 8;
-const SAMPLE_LIMIT = 60;
+const STORAGE_KEY = "rps-wizard-samples-v2";
+const MIN_SAMPLES = 12;
+const FEATURE_SIZE = 48;
+const CELL_SIZE = 6;
+const ORIENTATION_BINS = 9;
+const SAMPLE_LIMIT = 100;
+const PREDICTION_INTERVAL = 180;
+const STABILITY_WINDOW = 7;
+const STABLE_VOTES = 4;
 
 const video = document.querySelector("#camera");
 const canvas = document.querySelector("#capture-canvas");
 const cameraButton = document.querySelector("#camera-button");
+const playButton = document.querySelector("#play-button");
 const cameraStatus = document.querySelector("#camera-status");
 const cameraPlaceholder = document.querySelector("#camera-placeholder");
+const countdown = document.querySelector("#countdown");
 const trainingStatus = document.querySelector("#training-status");
 const trainingPanel = document.querySelector("#training-panel");
-const matchPanel = document.querySelector("#match-panel");
-const playButton = document.querySelector("#play-button");
-const readyBadge = document.querySelector("#ready-badge");
 const result = document.querySelector("#result");
-const resultLine = document.querySelector("#result-line");
-const resultMessage = document.querySelector("#result-message");
+const resultEmoji = document.querySelector("#result-emoji");
+const resultName = document.querySelector("#result-name");
 const resetButton = document.querySelector("#reset-button");
 
 let cameraStream;
 let samples = loadSamples();
+let matchPhase = "idle";
+let matchRunId = 0;
 
 function loadSamples() {
   try {
@@ -38,7 +42,8 @@ function loadSamples() {
           ? saved[gesture].filter(
               (sample) =>
                 Array.isArray(sample) &&
-                sample.length === CELL_SIZE * CELL_SIZE * ORIENTATION_BINS &&
+                sample.length ===
+                  (FEATURE_SIZE / CELL_SIZE) ** 2 * ORIENTATION_BINS &&
                 sample.every(Number.isFinite),
             )
           : [],
@@ -74,12 +79,13 @@ function updateProgress() {
   }
 
   const trained = allGesturesTrained();
-  readyBadge.textContent = trained ? "訓練完成，可以對戰" : "尚未完成訓練";
-  readyBadge.classList.toggle("ready", trained);
   document.querySelector("#training-step").classList.toggle("active", !trained);
   document.querySelector("#match-step").classList.toggle("active", trained);
-  playButton.disabled = !trained || !cameraStream;
+  playButton.disabled = (!trained || !cameraStream) && matchPhase === "idle";
   trainingPanel.classList.toggle("complete", trained);
+  if (matchPhase === "idle") {
+    playButton.textContent = "開始對戰";
+  }
 }
 
 async function startCamera() {
@@ -93,7 +99,11 @@ async function startCamera() {
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { facingMode: "user" },
+      video: {
+        facingMode: "user",
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
     });
     video.srcObject = cameraStream;
     await video.play();
@@ -122,6 +132,7 @@ async function startCamera() {
 }
 
 function stopCamera() {
+  stopMatch();
   if (cameraStream) {
     for (const track of cameraStream.getTracks()) track.stop();
     cameraStream = undefined;
@@ -143,7 +154,7 @@ function makeFeatureVector() {
     throw new Error("攝影機畫面尚未就緒，請稍候再試。");
   }
 
-  const side = Math.floor(Math.min(video.videoWidth, video.videoHeight) * 0.55);
+  const side = Math.floor(Math.min(video.videoWidth, video.videoHeight) * 0.75);
   const left = Math.floor((video.videoWidth - side) / 2);
   const top = Math.floor((video.videoHeight - side) / 2);
   canvas.width = FEATURE_SIZE;
@@ -159,7 +170,8 @@ function makeFeatureVector() {
       (0.299 * data[pixel] + 0.587 * data[pixel + 1] + 0.114 * data[pixel + 2]) / 255;
   }
 
-  const feature = new Float32Array(CELL_SIZE * CELL_SIZE * ORIENTATION_BINS);
+  const cellsPerSide = FEATURE_SIZE / CELL_SIZE;
+  const feature = new Float32Array(cellsPerSide * cellsPerSide * ORIENTATION_BINS);
   for (let y = 1; y < FEATURE_SIZE - 1; y += 1) {
     for (let x = 1; x < FEATURE_SIZE - 1; x += 1) {
       const offset = y * FEATURE_SIZE + x;
@@ -175,8 +187,8 @@ function makeFeatureVector() {
         ORIENTATION_BINS - 1,
         Math.floor((angle / Math.PI) * ORIENTATION_BINS),
       );
-      const cellX = Math.floor(x / CELL_SIZE);
-      const cellY = Math.floor(y / CELL_SIZE);
+      const cellX = Math.min(cellsPerSide - 1, Math.floor(x / CELL_SIZE));
+      const cellY = Math.min(cellsPerSide - 1, Math.floor(y / CELL_SIZE));
       feature[(cellY * CELL_SIZE + cellX) * ORIENTATION_BINS + bin] += magnitude;
     }
   }
@@ -203,38 +215,107 @@ function captureSample(gesture) {
 }
 
 function predictGesture(feature) {
-  const nearest = [];
+  const classDistances = [];
   for (const [gesture, classSamples] of Object.entries(samples)) {
+    const distances = [];
     for (const sample of classSamples) {
       let distance = 0;
       for (let index = 0; index < feature.length; index += 1) {
         const difference = feature[index] - sample[index];
         distance += difference * difference;
       }
-      nearest.push({ gesture, distance });
+      distances.push(distance);
     }
+    distances.sort((first, second) => first - second);
+    const closest = distances.slice(0, Math.min(3, distances.length));
+    if (closest.length === 0) continue;
+    const averageDistance =
+      closest.reduce((sum, distance) => sum + distance, 0) / closest.length;
+    classDistances.push({ gesture, distance: averageDistance });
   }
-  nearest.sort((first, second) => first.distance - second.distance);
-
-  const votes = new Map(Object.keys(GESTURES).map((gesture) => [gesture, 0]));
-  for (const neighbor of nearest.slice(0, 5)) {
-    votes.set(neighbor.gesture, votes.get(neighbor.gesture) + 1);
-  }
-  return [...votes].sort((first, second) => second[1] - first[1])[0][0];
+  classDistances.sort((first, second) => first.distance - second.distance);
+  const [best, runnerUp] = classDistances;
+  const margin =
+    (runnerUp.distance - best.distance) / Math.max(runnerUp.distance, 0.001);
+  if (margin < 0.04) return undefined;
+  return best.gesture;
 }
 
-function playRound() {
+function showResult(playerGesture) {
+  const computerGesture = GESTURES[playerGesture].beats;
+  resultEmoji.textContent = GESTURES[computerGesture].emoji;
+  resultName.textContent = GESTURES[computerGesture].name;
+  result.hidden = false;
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+async function startMatch() {
+  if (matchPhase !== "idle" || !cameraStream || !allGesturesTrained()) return;
+
+  matchPhase = "countdown";
+  const runId = ++matchRunId;
   result.hidden = true;
-  try {
-    const playerGesture = predictGesture(makeFeatureVector());
-    const computerGesture = GESTURES[playerGesture].beats;
-    resultLine.textContent =
-      `你出${GESTURES[playerGesture].name} ${GESTURES[playerGesture].emoji}　電腦出${GESTURES[computerGesture].name} ${GESTURES[computerGesture].emoji}`;
-    resultMessage.textContent = "電腦獲勝！下回合再試一次！";
-    result.hidden = false;
-  } catch (error) {
-    trainingStatus.textContent = error.message;
+  playButton.disabled = false;
+  playButton.textContent = "取消對戰";
+
+  for (const number of [3, 2, 1]) {
+    if (runId !== matchRunId) return;
+    countdown.textContent = number;
+    countdown.hidden = false;
+    await delay(1000);
   }
+  if (runId !== matchRunId) return;
+
+  countdown.hidden = true;
+  matchPhase = "running";
+  playButton.textContent = "停止對戰";
+  cameraStatus.textContent = "正在連續辨識手勢，請將手放在框框中央。";
+  await runDetectionLoop(runId);
+}
+
+async function runDetectionLoop(runId) {
+  const predictions = [];
+  let lastShownGesture;
+
+  while (runId === matchRunId && matchPhase === "running") {
+    try {
+      const gesture = predictGesture(makeFeatureVector());
+      predictions.push(gesture);
+      if (predictions.length > STABILITY_WINDOW) predictions.shift();
+
+      const counts = new Map();
+      for (const prediction of predictions) {
+        if (prediction) counts.set(prediction, (counts.get(prediction) || 0) + 1);
+      }
+      const [stableGesture, votes] = [...counts].sort(
+        (first, second) => second[1] - first[1],
+      )[0] || [];
+
+      if (votes >= STABLE_VOTES && stableGesture !== lastShownGesture) {
+        showResult(stableGesture);
+        lastShownGesture = stableGesture;
+      }
+      cameraStatus.textContent =
+        votes >= STABLE_VOTES
+          ? `已辨識你的手勢：${GESTURES[stableGesture].name}`
+          : "辨識中，請將手勢放在框框中央並保持清楚。";
+    } catch (error) {
+      cameraStatus.textContent = error.message;
+    }
+    await delay(PREDICTION_INTERVAL);
+  }
+}
+
+function stopMatch() {
+  matchRunId += 1;
+  const wasRunning = matchPhase !== "idle";
+  matchPhase = "idle";
+  countdown.hidden = true;
+  if (wasRunning) cameraStatus.textContent = "對戰已停止。";
+  updateProgress();
 }
 
 cameraButton.addEventListener("click", () => {
@@ -246,10 +327,14 @@ for (const button of document.querySelectorAll(".gesture-card")) {
   button.addEventListener("click", () => captureSample(button.dataset.gesture));
 }
 
-playButton.addEventListener("click", playRound);
+playButton.addEventListener("click", () => {
+  if (matchPhase === "idle") void startMatch();
+  else stopMatch();
+});
 
 resetButton.addEventListener("click", () => {
   if (!window.confirm("確定要清除所有手勢訓練資料嗎？")) return;
+  stopMatch();
   samples = Object.fromEntries(Object.keys(GESTURES).map((gesture) => [gesture, []]));
   if (!saveSamples()) return;
   result.hidden = true;

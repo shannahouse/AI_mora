@@ -27,6 +27,10 @@ button {
   font: inherit;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .app {
   width: min(100%, 760px);
   margin: 0 auto;
@@ -146,16 +150,86 @@ video.active {
 
 .guide {
   position: absolute;
-  width: 54%;
+  width: 58%;
   aspect-ratio: 1;
   border: 2px dashed rgb(255 255 255 / 72%);
   border-radius: 18px;
   pointer-events: none;
 }
 
+.countdown,
+.result-overlay {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgb(255 253 247 / 92%);
+  box-shadow: 0 6px 28px rgb(0 0 0 / 18%);
+  text-align: center;
+}
+
+.frame-controls {
+  position: absolute;
+  z-index: 3;
+  right: 16px;
+  bottom: 14px;
+  left: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.frame-controls .button {
+  width: min(100%, 280px);
+  box-shadow: 0 4px 18px rgb(0 0 0 / 22%);
+}
+
+.countdown {
+  width: 116px;
+  height: 116px;
+  color: var(--green-dark);
+  font-size: 4.5rem;
+  font-weight: 800;
+}
+
+.result-overlay {
+  right: 14px;
+  bottom: 70px;
+  left: 14px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+}
+
+.result-caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.result-emoji {
+  font-size: clamp(2.6rem, 8vw, 4rem);
+  line-height: 1.15;
+}
+
+.result-name {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.result-message {
+  margin: 0;
+  color: #a13e35;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
 .camera-controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 14px 5px 2px;
 }
@@ -207,6 +281,10 @@ video.active {
 
 .button.primary:not(:disabled):hover {
   background: var(--green-dark);
+}
+
+.button.primary:disabled {
+  background: #aebbb0;
 }
 
 .section-heading {
@@ -296,41 +374,6 @@ h2 {
 .training-panel > .status {
   min-height: 1.6em;
   margin: 13px 0 0;
-}
-
-.match-panel {
-  padding-bottom: 22px;
-}
-
-.match-panel .hint {
-  margin-bottom: 14px;
-}
-
-.result {
-  margin-top: 18px;
-  border-radius: 13px;
-  background: #f1f5ee;
-  padding: 17px;
-  text-align: center;
-}
-
-.result-caption {
-  margin-bottom: 6px;
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.result-line {
-  margin-bottom: 7px;
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.result-message {
-  margin-bottom: 0;
-  color: var(--green-dark);
-  font-size: 1.25rem;
-  font-weight: 800;
 }
 
 footer {

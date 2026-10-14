@@ -29,6 +29,16 @@
             <p>連接攝影機，將手勢放進框框裡</p>
           </div>
           <div class="guide" aria-hidden="true"></div>
+          <div class="countdown" id="countdown" aria-live="assertive" hidden></div>
+          <div class="frame-controls">
+            <button class="button primary" id="play-button" type="button" disabled>開始對戰</button>
+          </div>
+          <div class="result-overlay" id="result" aria-live="polite" hidden>
+            <p class="result-caption">電腦出拳</p>
+            <span class="result-emoji" id="result-emoji" aria-hidden="true"></span>
+            <p class="result-name" id="result-name"></p>
+            <p class="result-message">你輸了</p>
+          </div>
           <canvas id="capture-canvas" hidden></canvas>
         </div>
         <div class="camera-controls">
@@ -45,48 +55,31 @@
           </div>
           <button class="text-button" id="reset-button" type="button">清除訓練資料</button>
         </div>
-        <p class="hint">依序比出剪刀、石頭、布，按下按鈕拍攝樣本。每種至少需要 8 張；移動手的位置與角度，讓辨識更穩定。</p>
+        <p class="hint">依序比出剪刀、石頭、布，按下按鈕拍攝樣本。每種至少需要 12 張；改變手勢角度和位置，並使用明亮、簡單的背景，讓辨識更穩定。</p>
         <div class="gesture-list">
           <button class="gesture-card" data-gesture="scissors" type="button" disabled>
             <span class="gesture-emoji" aria-hidden="true">✌️</span>
             <span class="gesture-name">剪刀</span>
-            <span class="sample-count" id="count-scissors">0 / 8 張</span>
+            <span class="sample-count" id="count-scissors">0 / 12 張</span>
             <span class="button sample-button">拍攝剪刀樣本</span>
           </button>
           <button class="gesture-card" data-gesture="rock" type="button" disabled>
             <span class="gesture-emoji" aria-hidden="true">✊</span>
             <span class="gesture-name">石頭</span>
-            <span class="sample-count" id="count-rock">0 / 8 張</span>
+            <span class="sample-count" id="count-rock">0 / 12 張</span>
             <span class="button sample-button">拍攝石頭樣本</span>
           </button>
           <button class="gesture-card" data-gesture="paper" type="button" disabled>
             <span class="gesture-emoji" aria-hidden="true">✋</span>
             <span class="gesture-name">布</span>
-            <span class="sample-count" id="count-paper">0 / 8 張</span>
+            <span class="sample-count" id="count-paper">0 / 12 張</span>
             <span class="button sample-button">拍攝布樣本</span>
           </button>
         </div>
         <p class="status" id="training-status" role="status" aria-live="polite">開啟攝影機後即可開始訓練。你的樣本只會儲存在這個瀏覽器。</p>
       </section>
 
-      <section class="panel match-panel" id="match-panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">決戰時刻</p>
-            <h2>來猜拳吧！</h2>
-          </div>
-          <span class="ready-badge" id="ready-badge">尚未完成訓練</span>
-        </div>
-        <p class="hint">比出手勢並拍攝，辨識成功後電腦就會出招——而且永遠贏！</p>
-        <button class="button primary" id="play-button" type="button" disabled>辨識手勢並猜拳</button>
-        <div class="result" id="result" aria-live="polite" hidden>
-          <p class="result-caption">本回合結果</p>
-          <p class="result-line" id="result-line"></p>
-          <p class="result-message" id="result-message"></p>
-        </div>
-      </section>
-
-      <footer>手勢辨識在你的瀏覽器中進行，不會上傳攝影機影像。</footer>
+      <footer>手勢辨識在你的瀏覽器中進行，不會上傳攝影機影像。對戰中會持續偵測，按「停止對戰」可結束。</footer>
     </main>
   </body>
 </html>
