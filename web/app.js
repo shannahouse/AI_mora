@@ -291,7 +291,7 @@ function drawDetectionOverlay(detection) {
   }
   context.stroke();
 
-  context.fillStyle = "#fff36b";
+  context.fillStyle = "#ff1744";
   for (let index = 0; index < landmarks.length; index += 1) {
     const joint = point(index);
     context.beginPath();
