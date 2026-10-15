@@ -107,21 +107,24 @@ h1 {
   position: sticky;
   z-index: 4;
   top: 12px;
+  width: min(calc(100vw - 36px), 1520px);
+  margin-left: 50%;
   padding: 14px;
+  transform: translateX(-50%);
 }
 
 .camera-frame {
   position: relative;
   display: grid;
   overflow: hidden;
-  height: min(38vh, 280px);
+  height: min(76vh, 560px);
   border-radius: 12px;
   background: #222923;
   place-items: center;
 }
 
 .gesture-card {
-  scroll-margin-top: min(365px, calc(38vh + 100px));
+  scroll-margin-top: min(645px, calc(76vh + 100px));
 }
 
 video {
@@ -420,9 +423,17 @@ footer {
     padding: 24px 12px 34px;
   }
 
+  .camera-panel {
+    width: calc(100vw - 24px);
+  }
+
   @media (max-height: 650px) {
     .camera-frame {
-      height: min(28vh, 180px);
+      height: min(56vh, 360px);
+    }
+
+    .gesture-card {
+      scroll-margin-top: min(465px, calc(56vh + 100px));
     }
 
     .guide {
