@@ -20,7 +20,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  padding: 36px 18px 48px;
+  padding: 14px 18px 18px;
 }
 
 button {
@@ -32,17 +32,21 @@ button {
 }
 
 .app {
-  width: min(100%, 760px);
+  width: min(100%, 1600px);
   margin: 0 auto;
 }
 
 .hero {
-  margin: 0 auto 26px;
-  text-align: center;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 auto 8px;
+  text-align: left;
 }
 
 .eyebrow {
-  margin: 0 0 8px;
+  margin: 0;
   color: var(--green);
   font-size: 0.72rem;
   font-weight: 700;
@@ -56,8 +60,8 @@ p {
 }
 
 h1 {
-  margin-bottom: 8px;
-  font-size: clamp(2rem, 7vw, 3rem);
+  margin-bottom: 0;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
   letter-spacing: 0.015em;
 }
 
@@ -69,13 +73,15 @@ h1 {
 
 .intro {
   margin-bottom: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
 }
 
 .steps {
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
 }
 
 .step,
@@ -85,7 +91,7 @@ h1 {
   color: #777c74;
   font-size: 0.84rem;
   font-weight: 600;
-  padding: 8px 15px;
+  padding: 6px 12px;
 }
 
 .step.active,
@@ -95,36 +101,38 @@ h1 {
 }
 
 .panel {
-  margin-bottom: 18px;
+  margin-bottom: 0;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--cream);
   box-shadow: 0 7px 24px rgb(53 49 35 / 4%);
-  padding: clamp(18px, 4vw, 26px);
+  padding: 14px;
+}
+
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
 }
 
 .camera-panel {
-  position: sticky;
-  z-index: 4;
-  top: 12px;
-  width: min(calc(100vw - 36px), 1520px);
-  margin-left: 50%;
-  padding: 14px;
-  transform: translateX(-50%);
+  min-width: 0;
+  padding: 10px;
 }
 
 .camera-frame {
   position: relative;
   display: grid;
   overflow: hidden;
-  height: min(76vh, 560px);
+  container-type: size;
+  height: min(54vh, 420px);
   border-radius: 12px;
   background: #222923;
   place-items: center;
 }
 
 .gesture-card {
-  scroll-margin-top: min(645px, calc(76vh + 100px));
+  scroll-margin-top: 16px;
 }
 
 video {
@@ -175,7 +183,7 @@ video.active {
 
 .guide {
   position: absolute;
-  width: min(58%, 34vh, 230px);
+  width: min(142cqw, 100cqh, 563px);
   aspect-ratio: 1;
   border: 2px dashed rgb(255 255 255 / 72%);
   border-radius: 18px;
@@ -266,8 +274,8 @@ video.active {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
-  padding: 14px 5px 2px;
+  gap: 8px 12px;
+  padding: 8px 2px 0;
 }
 
 .camera-controls .status {
@@ -278,13 +286,13 @@ video.active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 43px;
+  min-height: 38px;
   border: 0;
   border-radius: 10px;
   cursor: pointer;
   font-size: 0.91rem;
   font-weight: 700;
-  padding: 10px 16px;
+  padding: 8px 12px;
   transition: background 120ms ease, transform 120ms ease;
 }
 
@@ -328,7 +336,7 @@ video.active {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .section-heading .eyebrow {
@@ -337,7 +345,7 @@ video.active {
 
 h2 {
   margin-bottom: 0;
-  font-size: 1.35rem;
+  font-size: 1.15rem;
 }
 
 .text-button {
@@ -354,27 +362,30 @@ h2 {
 }
 
 .hint {
-  margin-bottom: 18px;
-  font-size: 0.9rem;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .gesture-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .gesture-card {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex-direction: column;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
   align-items: center;
-  gap: 6px;
+  column-gap: 8px;
+  row-gap: 2px;
   border: 1px solid var(--line);
   border-radius: 13px;
   background: #fffefa;
   cursor: pointer;
-  padding: 14px 9px 12px;
+  padding: 8px;
   transition: border-color 120ms ease, transform 120ms ease;
 }
 
@@ -383,6 +394,7 @@ h2 {
 }
 
 .gesture-emoji {
+  grid-row: 1 / 3;
   font-size: 2rem;
 }
 
@@ -398,9 +410,11 @@ h2 {
 }
 
 .sample-button {
-  width: 100%;
-  min-height: 36px;
-  margin-top: 4px;
+  grid-column: 3;
+  grid-row: 1 / 3;
+  min-width: 92px;
+  min-height: 34px;
+  margin-top: 0;
   background: #edf1eb;
   color: var(--green-dark);
   font-size: 0.77rem;
@@ -409,58 +423,123 @@ h2 {
 
 .training-panel > .status {
   min-height: 1.6em;
-  margin: 13px 0 0;
+  margin: 9px 0 0;
 }
 
 footer {
   color: var(--muted);
   font-size: 0.78rem;
   text-align: center;
+  margin-top: 8px;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 849px) {
   body {
-    padding: 24px 12px 34px;
+    padding: 16px 12px 24px;
   }
 
-  .camera-panel {
-    width: calc(100vw - 24px);
+  .hero {
+    flex-wrap: wrap;
+    gap: 4px 9px;
   }
 
-  @media (max-height: 650px) {
-    .camera-frame {
-      height: min(56vh, 360px);
-    }
-
-    .gesture-card {
-      scroll-margin-top: min(465px, calc(56vh + 100px));
-    }
-
-    .guide {
-      width: min(50%, 25vh, 150px);
-    }
-  }
-
-  .camera-controls {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
+  .intro {
+    flex-basis: 100%;
   }
 
   .gesture-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 7px;
   }
 
+  .guide {
+    width: min(122cqw, 87.4cqh, 367px);
+  }
+
   .gesture-card {
-    padding-right: 5px;
-    padding-left: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 5px;
   }
 
   .sample-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    margin-top: 4px;
     font-size: 0.7rem;
+  }
+
+  .camera-controls {
+    align-items: center;
   }
 
   .section-heading {
     align-items: flex-start;
+  }
+}
+
+@media (min-width: 850px) and (min-height: 650px) {
+  body {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px 14px;
+  }
+
+  .app {
+    display: grid;
+    height: 100%;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .hero {
+    margin-bottom: 0;
+  }
+
+  .steps {
+    margin-bottom: 0;
+  }
+
+  .step,
+  .ready-badge {
+    padding: 4px 10px;
+    font-size: 0.76rem;
+  }
+
+  .game-layout {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(285px, 340px);
+    gap: 12px;
+  }
+
+  .camera-panel {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .camera-frame {
+    height: auto;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .training-panel {
+    min-height: 0;
+    overflow: auto;
+    padding: 12px;
+  }
+
+  .camera-controls {
+    padding-top: 7px;
+  }
+
+  footer {
+    margin-top: 0;
+    font-size: 0.7rem;
   }
 }
