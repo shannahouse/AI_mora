@@ -33,6 +33,7 @@ let cameraStream;
 let samples = loadSamples();
 let matchPhase = "idle";
 let matchRunId = 0;
+let countdownUtterance;
 let handLandmarker;
 let handLandmarkerPromise;
 
@@ -301,10 +302,55 @@ async function runCountdown(runId) {
   return runId === matchRunId;
 }
 
+function speakGestureCue(runId) {
+  if (!window.speechSynthesis || typeof SpeechSynthesisUtterance !== "function") {
+    cameraStatus.textContent = "此瀏覽器不支援語音播放，請使用最新版 Chrome。";
+    return Promise.resolve(false);
+  }
+
+  const utterance = new SpeechSynthesisUtterance("剪刀、石頭、布");
+  utterance.lang = "zh-TW";
+  utterance.rate = 1.2;
+  utterance.volume = 1;
+  countdownUtterance = utterance;
+  cameraStatus.textContent = "剪刀、石頭、布！";
+
+  return new Promise((resolve) => {
+    const finish = (played) => {
+      if (countdownUtterance === utterance) countdownUtterance = undefined;
+      resolve(played);
+    };
+    utterance.onend = () => finish(true);
+    utterance.onerror = () => {
+      if (runId === matchRunId) {
+        cameraStatus.textContent = "無法播放猜拳語音，請確認瀏覽器音量與語音設定後重試。";
+      }
+      finish(false);
+    };
+
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      if (runId === matchRunId) {
+        cameraStatus.textContent = `語音播放失敗：${error.message}`;
+      }
+      finish(false);
+    }
+  });
+}
+
 async function runMatchLoop(runId) {
   while (runId === matchRunId) {
     matchPhase = "countdown";
     if (!(await runCountdown(runId))) return;
+    if (!(await speakGestureCue(runId))) {
+      if (runId === matchRunId) {
+        matchPhase = "idle";
+        updateProgress();
+      }
+      return;
+    }
+    if (runId !== matchRunId) return;
 
     matchPhase = "running";
     cameraStatus.textContent = "辨識中，請將手勢放在框框中央並保持清楚。";
@@ -352,6 +398,10 @@ async function detectGesture(runId) {
 
 function stopMatch() {
   matchRunId += 1;
+  if (countdownUtterance) {
+    window.speechSynthesis.cancel();
+    countdownUtterance = undefined;
+  }
   const wasRunning = matchPhase !== "idle";
   matchPhase = "idle";
   countdown.hidden = true;
