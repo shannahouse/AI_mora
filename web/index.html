@@ -24,6 +24,7 @@
       <section class="panel camera-panel" aria-label="網路攝影機">
         <div class="camera-frame">
           <video id="camera" autoplay playsinline muted></video>
+          <canvas id="detection-overlay" class="detection-overlay" aria-hidden="true" hidden></canvas>
           <div class="camera-placeholder" id="camera-placeholder">
             <span aria-hidden="true">📷</span>
             <p>連接攝影機，將手勢放進框框裡</p>
@@ -44,6 +45,7 @@
         </div>
         <div class="camera-controls">
           <button class="button secondary" id="camera-button" type="button">開啟攝影機</button>
+          <button class="button secondary" id="detection-button" type="button" aria-pressed="false">顯示 AI 偵測</button>
           <p id="camera-status" class="status" role="status" aria-live="polite">使用 localhost 才能安全存取攝影機。</p>
         </div>
       </section>

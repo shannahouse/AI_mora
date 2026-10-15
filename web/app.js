@@ -18,9 +18,12 @@ const HAND_FEATURE_SIZE = (21 * 20) / 2;
 
 const video = document.querySelector("#camera");
 const cameraButton = document.querySelector("#camera-button");
+const detectionButton = document.querySelector("#detection-button");
 const playButton = document.querySelector("#play-button");
 const cameraStatus = document.querySelector("#camera-status");
 const cameraPlaceholder = document.querySelector("#camera-placeholder");
+const detectionOverlay = document.querySelector("#detection-overlay");
+const detectionContext = detectionOverlay.getContext("2d");
 const countdown = document.querySelector("#countdown");
 const trainingStatus = document.querySelector("#training-status");
 const trainingPanel = document.querySelector("#training-panel");
@@ -28,6 +31,14 @@ const result = document.querySelector("#result");
 const resultEmoji = document.querySelector("#result-emoji");
 const resultName = document.querySelector("#result-name");
 const resetButton = document.querySelector("#reset-button");
+const HAND_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [5, 9], [9, 10], [10, 11], [11, 12],
+  [9, 13], [13, 14], [14, 15], [15, 16],
+  [13, 17], [17, 18], [18, 19], [19, 20],
+  [0, 17],
+];
 
 let cameraStream;
 let samples = loadSamples();
@@ -36,6 +47,11 @@ let matchRunId = 0;
 let countdownUtterance;
 let handLandmarker;
 let handLandmarkerPromise;
+let detectionOverlayEnabled = false;
+let detectionAnimationFrame;
+let latestHandDetection;
+let latestDetectionAt = 0;
+let lastDetectionVideoTime = -1;
 
 function loadSamples() {
   try {
@@ -181,6 +197,7 @@ async function loadHandLandmarker() {
 
 function stopCamera() {
   stopMatch();
+  stopDetectionOverlay();
   if (cameraStream) {
     for (const track of cameraStream.getTracks()) track.stop();
     cameraStream = undefined;
@@ -202,7 +219,13 @@ function makeFeatureVector() {
     throw new Error("攝影機畫面尚未就緒，請稍候再試。");
   }
 
-  const landmarks = handLandmarker.detectForVideo(video, performance.now()).worldLandmarks[0];
+  const detection =
+    detectionOverlayEnabled &&
+    latestHandDetection &&
+    performance.now() - latestDetectionAt < 200
+    ? latestHandDetection
+    : detectHandFrame();
+  const landmarks = detection.worldLandmarks[0];
   if (!landmarks) return undefined;
 
   const palmScale = Math.hypot(
@@ -222,6 +245,109 @@ function makeFeatureVector() {
     }
   }
   return feature;
+}
+
+function detectHandFrame() {
+  latestHandDetection = handLandmarker.detectForVideo(video, performance.now());
+  latestDetectionAt = performance.now();
+  lastDetectionVideoTime = video.currentTime;
+  if (detectionOverlayEnabled) drawDetectionOverlay(latestHandDetection);
+  return latestHandDetection;
+}
+
+function drawDetectionOverlay(detection) {
+  const bounds = detectionOverlay.getBoundingClientRect();
+  const pixelRatio = window.devicePixelRatio || 1;
+  const canvasWidth = Math.round(bounds.width * pixelRatio);
+  const canvasHeight = Math.round(bounds.height * pixelRatio);
+  if (detectionOverlay.width !== canvasWidth || detectionOverlay.height !== canvasHeight) {
+    detectionOverlay.width = canvasWidth;
+    detectionOverlay.height = canvasHeight;
+  }
+
+  const context = detectionContext;
+  context.clearRect(0, 0, canvasWidth, canvasHeight);
+  const landmarks = detection.landmarks[0];
+  if (!landmarks || !video.videoWidth || !video.videoHeight) return;
+
+  const scale = Math.max(canvasWidth / video.videoWidth, canvasHeight / video.videoHeight);
+  const offsetX = (canvasWidth - video.videoWidth * scale) / 2;
+  const offsetY = (canvasHeight - video.videoHeight * scale) / 2;
+  const point = (index) => ({
+    x: offsetX + landmarks[index].x * video.videoWidth * scale,
+    y: offsetY + landmarks[index].y * video.videoHeight * scale,
+  });
+
+  context.lineWidth = 2.5 * pixelRatio;
+  context.strokeStyle = "#43f5c4";
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  for (const [start, end] of HAND_CONNECTIONS) {
+    const first = point(start);
+    const second = point(end);
+    context.moveTo(first.x, first.y);
+    context.lineTo(second.x, second.y);
+  }
+  context.stroke();
+
+  context.fillStyle = "#fff36b";
+  for (let index = 0; index < landmarks.length; index += 1) {
+    const joint = point(index);
+    context.beginPath();
+    context.arc(joint.x, joint.y, 4 * pixelRatio, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
+function updateDetectionOverlay() {
+  if (!detectionOverlayEnabled) return;
+  if (!cameraStream) {
+    stopDetectionOverlay();
+    return;
+  }
+
+  if (
+    video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+    video.currentTime !== lastDetectionVideoTime &&
+    performance.now() - latestDetectionAt >= PREDICTION_INTERVAL
+  ) {
+    try {
+      detectHandFrame();
+    } catch (error) {
+      console.error("AI 手部關節顯示失敗。", error);
+      stopDetectionOverlay();
+      cameraStatus.textContent = `AI 偵測顯示失敗：${error.message}`;
+      return;
+    }
+  }
+  detectionAnimationFrame = window.requestAnimationFrame(updateDetectionOverlay);
+}
+
+function startDetectionOverlay() {
+  detectionOverlayEnabled = true;
+  detectionOverlay.hidden = false;
+  detectionOverlay.classList.add("active");
+  detectionButton.textContent = "關閉 AI 偵測";
+  detectionButton.setAttribute("aria-pressed", "true");
+  lastDetectionVideoTime = -1;
+  updateDetectionOverlay();
+}
+
+function stopDetectionOverlay() {
+  detectionOverlayEnabled = false;
+  if (detectionAnimationFrame !== undefined) {
+    window.cancelAnimationFrame(detectionAnimationFrame);
+    detectionAnimationFrame = undefined;
+  }
+  detectionOverlay.hidden = true;
+  detectionOverlay.classList.remove("active");
+  detectionButton.textContent = "顯示 AI 偵測";
+  detectionButton.setAttribute("aria-pressed", "false");
+  latestHandDetection = undefined;
+  latestDetectionAt = 0;
+  lastDetectionVideoTime = -1;
+  detectionContext.clearRect(0, 0, detectionOverlay.width, detectionOverlay.height);
 }
 
 function captureSample(gesture) {
@@ -413,6 +539,16 @@ function stopMatch() {
 cameraButton.addEventListener("click", () => {
   if (cameraStream) stopCamera();
   else void startCamera();
+});
+
+detectionButton.addEventListener("click", () => {
+  if (detectionOverlayEnabled) {
+    stopDetectionOverlay();
+  } else if (!cameraStream || !handLandmarker) {
+    cameraStatus.textContent = "請先開啟攝影機並等待 AI 辨識模型準備完成。";
+  } else {
+    startDetectionOverlay();
+  }
 });
 
 for (const button of document.querySelectorAll(".gesture-card")) {
