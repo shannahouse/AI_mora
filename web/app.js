@@ -24,6 +24,14 @@ const cameraStatus = document.querySelector("#camera-status");
 const cameraPlaceholder = document.querySelector("#camera-placeholder");
 const detectionOverlay = document.querySelector("#detection-overlay");
 const detectionContext = detectionOverlay.getContext("2d");
+// MediaPipe 對非正方形畫面的關節座標會偏移，所以先裁出影片中央的正方形再送去偵測。
+const detectionInput = document.createElement("canvas");
+const detectionInputContext = detectionInput.getContext("2d");
+const forceCpuDelegate = new URLSearchParams(location.search).has("cpu");
+const calibrationButton = document.querySelector("#calibration-button");
+const debugView = document.querySelector("#debug-view");
+const debugViewContext = debugView.getContext("2d");
+let activeDelegate = forceCpuDelegate ? "CPU" : "GPU";
 const countdown = document.querySelector("#countdown");
 const trainingStatus = document.querySelector("#training-status");
 const trainingPanel = document.querySelector("#training-panel");
@@ -168,7 +176,7 @@ async function loadHandLandmarker() {
       );
       const vision = await FilesetResolver.forVisionTasks(`${MEDIAPIPE_CDN}/wasm`);
       const options = {
-        baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" },
+        baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: forceCpuDelegate ? "CPU" : "GPU" },
         runningMode: "VIDEO",
         numHands: 1,
         minHandDetectionConfidence: 0.65,
@@ -179,6 +187,7 @@ async function loadHandLandmarker() {
         handLandmarker = await HandLandmarker.createFromOptions(vision, options);
       } catch (gpuError) {
         console.warn("GPU 手部辨識初始化失敗，改用 CPU。", gpuError);
+        activeDelegate = "CPU (GPU 失敗)";
         handLandmarker = await HandLandmarker.createFromOptions(vision, {
           ...options,
           baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "CPU" },
@@ -247,11 +256,26 @@ function makeFeatureVector() {
   return feature;
 }
 
+function captureDetectionInput() {
+  const size = Math.min(video.videoWidth, video.videoHeight);
+  const x = (video.videoWidth - size) / 2;
+  const y = (video.videoHeight - size) / 2;
+  if (detectionInput.width !== size) {
+    detectionInput.width = size;
+    detectionInput.height = size;
+  }
+  detectionInputContext.drawImage(video, x, y, size, size, 0, 0, size, size);
+  return { x, y, size };
+}
+
 function detectHandFrame() {
-  latestHandDetection = handLandmarker.detectForVideo(video, performance.now());
+  const crop = captureDetectionInput();
+  latestHandDetection = handLandmarker.detectForVideo(detectionInput, performance.now());
+  latestHandDetection.crop = crop;
   latestDetectionAt = performance.now();
   lastDetectionVideoTime = video.currentTime;
   if (detectionOverlayEnabled) drawDetectionOverlay(latestHandDetection);
+  if (!debugView.hidden) drawDebugView(latestHandDetection);
   return latestHandDetection;
 }
 
@@ -270,14 +294,26 @@ function drawDetectionOverlay(detection) {
   const landmarks = detection.landmarks[0];
   if (!landmarks || !video.videoWidth || !video.videoHeight) return;
 
-  const scale = Math.max(canvasWidth / video.videoWidth, canvasHeight / video.videoHeight);
-  const offsetX = (canvasWidth - video.videoWidth * scale) / 2;
-  const offsetY = (canvasHeight - video.videoHeight * scale) / 2;
+  // 以影片元素實際在畫面上的位置換算（object-fit: cover 置中裁切），不假設它和畫布一樣大。
+  // 影片和畫布都用 scaleX(-1) 鏡像，所以水平方向以右緣對齊。
+  const videoBounds = video.getBoundingClientRect();
+  const boxWidth = videoBounds.width * pixelRatio;
+  const boxHeight = videoBounds.height * pixelRatio;
+  const scale = Math.max(boxWidth / video.videoWidth, boxHeight / video.videoHeight);
+  const offsetX =
+    (bounds.right - videoBounds.right) * pixelRatio + (boxWidth - video.videoWidth * scale) / 2;
+  const offsetY =
+    (videoBounds.top - bounds.top) * pixelRatio + (boxHeight - video.videoHeight * scale) / 2;
+  const { crop } = detection;
   const point = (index) => ({
-    x: offsetX + landmarks[index].x * video.videoWidth * scale,
-    y: offsetY + landmarks[index].y * video.videoHeight * scale,
+    x: offsetX + (crop.x + landmarks[index].x * crop.size) * scale,
+    y: offsetY + (crop.y + landmarks[index].y * crop.size) * scale,
   });
 
+  drawSkeleton(context, landmarks.length, point, pixelRatio);
+}
+
+function drawSkeleton(context, jointCount, point, pixelRatio) {
   context.lineWidth = 2.5 * pixelRatio;
   context.strokeStyle = "#43f5c4";
   context.lineCap = "round";
@@ -292,12 +328,40 @@ function drawDetectionOverlay(detection) {
   context.stroke();
 
   context.fillStyle = "#ff1744";
-  for (let index = 0; index < landmarks.length; index += 1) {
+  for (let index = 0; index < jointCount; index += 1) {
     const joint = point(index);
     context.beginPath();
     context.arc(joint.x, joint.y, 4 * pixelRatio, 0, Math.PI * 2);
     context.fill();
   }
+}
+
+// 手勢定位校準：在畫面角落顯示實際送進 AI 的正方形畫面，骨架直接畫在上面，不經過任何畫面換算。
+function drawDebugView(detection) {
+  const size = 240;
+  const lineHeight = 15;
+  const info = [
+    `delegate: ${activeDelegate}`,
+    `video: ${video.videoWidth}×${video.videoHeight}`,
+    `element: ${video.clientWidth}×${video.clientHeight}  dpr: ${window.devicePixelRatio}`,
+    `fit: ${getComputedStyle(video).objectFit} / ${getComputedStyle(video).objectPosition}`,
+  ];
+  if (debugView.width !== size) {
+    debugView.width = size;
+    debugView.height = size + info.length * lineHeight + 8;
+  }
+  const context = debugViewContext;
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, debugView.width, debugView.height);
+  context.drawImage(detectionInput, 0, 0, size, size);
+  const landmarks = detection.landmarks[0];
+  if (landmarks) {
+    const point = (index) => ({ x: landmarks[index].x * size, y: landmarks[index].y * size });
+    drawSkeleton(context, landmarks.length, point, 0.6);
+  }
+  context.fillStyle = "#fff";
+  context.font = "11px monospace";
+  info.forEach((line, index) => context.fillText(line, 6, size + 4 + (index + 1) * lineHeight - 3));
 }
 
 function updateDetectionOverlay() {
@@ -344,6 +408,7 @@ function stopDetectionOverlay() {
   detectionOverlay.classList.remove("active");
   detectionButton.textContent = "顯示 AI 偵測";
   detectionButton.setAttribute("aria-pressed", "false");
+  setCalibrationView(false);
   latestHandDetection = undefined;
   latestDetectionAt = 0;
   lastDetectionVideoTime = -1;
@@ -548,6 +613,23 @@ detectionButton.addEventListener("click", () => {
     cameraStatus.textContent = "請先開啟攝影機並等待 AI 辨識模型準備完成。";
   } else {
     startDetectionOverlay();
+  }
+});
+
+// 校準畫面靠 AI 偵測的迴圈更新，所以打開時一併開啟 AI 偵測，關閉 AI 偵測時也一併關閉。
+function setCalibrationView(visible) {
+  debugView.hidden = !visible;
+  calibrationButton.setAttribute("aria-pressed", String(visible));
+}
+
+calibrationButton.addEventListener("click", () => {
+  if (!debugView.hidden) {
+    setCalibrationView(false);
+  } else if (!cameraStream || !handLandmarker) {
+    cameraStatus.textContent = "請先開啟攝影機並等待 AI 辨識模型準備完成。";
+  } else {
+    if (!detectionOverlayEnabled) startDetectionOverlay();
+    setCalibrationView(true);
   }
 });
 
