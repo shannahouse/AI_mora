@@ -192,8 +192,8 @@ video.active {
 
 .guide span {
   position: absolute;
+  top: 8px;
   right: 0;
-  bottom: 8px;
   left: 0;
   color: white;
   font-size: 0.78rem;
@@ -224,7 +224,7 @@ video.active {
   justify-content: center;
 }
 
-.frame-controls .button {
+.frame-controls .button.primary {
   width: min(100%, 280px);
   box-shadow: 0 4px 18px rgb(0 0 0 / 22%);
 }
@@ -481,7 +481,7 @@ footer {
   }
 }
 
-@media (min-width: 850px) and (min-height: 650px) {
+@media (min-width: 850px) and (min-height: 480px) {
   body {
     height: 100dvh;
     min-height: 0;
